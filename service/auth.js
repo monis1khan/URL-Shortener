@@ -1,18 +1,3 @@
-// const jwt = require("jsonwebtoken");
-// const secret ="Futball$123@"
-// function setUser( user ) {
-//    return jwt.sign(user,secret)
-// }
-
-// function getUser(token) {
-//     if(!token) return null;
-//     return jwt.verify(token,secret)
-// }
-
-// module.exports = {
-//     setUser,
-//     getUser
-// }
 
 // service/auth.js
 const jwt = require("jsonwebtoken");
