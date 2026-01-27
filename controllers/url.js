@@ -48,8 +48,22 @@ async function handleRedirectUser(req, res) {
   res.redirect(entry.redirectURL);
 }
 
+async function handleGetMyURLs(req, res) {
+ 
+  if (!req.user || !req.user._id) return res.status(401).json({ error: 'Unauthorized' });
+
+
+  const urls = await URL.find({ createdBy: req.user._id });
+
+  
+  return res.json(urls);
+}
+
 module.exports = {
   handleGenerateNewShortURL,
   handleGetAnalytics,
-  handleRedirectUser, // Don't forget to export this!
+  handleRedirectUser, 
+  handleGetMyURLs,
+
+  
 };

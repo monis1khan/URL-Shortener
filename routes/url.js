@@ -2,7 +2,8 @@ const express = require("express");
 const { 
     handleGenerateNewShortURL, 
     handleGetAnalytics, 
-    handleRedirectUser // 1. Import the new redirect function
+    handleRedirectUser,
+    handleGetMyURLs
 } = require("../controllers/url");
 
 // 2. Import Auth Middleware 
@@ -12,8 +13,7 @@ const { restrictToLoggedinUserOnly } = require("../middlewares/auth");
 const router = express.Router();
 
 // --- PUBLIC ROUTE ---
-// Anyone can visit this (no login required)
-router.get("/:shortId", handleRedirectUser);
+// Anyone can visit this (no login required)router.get("/:shortId", handleRedirectUser);
 
 // --- PROTECTED ROUTES ---
 // User must be logged in to create URLs or view analytics
@@ -21,5 +21,10 @@ router.get("/:shortId", handleRedirectUser);
 router.post("/", restrictToLoggedinUserOnly, handleGenerateNewShortURL);
 
 router.get("/analytics/:shortId", restrictToLoggedinUserOnly, handleGetAnalytics);
+
+router.get("/history", restrictToLoggedinUserOnly, handleGetMyURLs);
+
+// Anyone can visit this (no login required)
+router.get("/:shortId", handleRedirectUser);
 
 module.exports = router;

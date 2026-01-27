@@ -10,13 +10,16 @@ const Signup = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
+
+const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/user', formData);
+      // FIX: Change '/user' to '/user/signup'
+      await api.post('/user/signup', formData); 
       navigate('/login');
     } catch (error) {
       console.error('Signup failed:', error);
+      
     }
   };
 
