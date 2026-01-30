@@ -25,8 +25,8 @@ app.use(express.urlencoded({extended: false}))
 
 
 
-app.use("/url", urlRoute);
-app.use("/user", userRoute);
+app.use("/api/url", urlRoute);
+app.use("/api/user", userRoute);
 
 // Public redirect route - keep this for backward compatibility
 const { handleRedirectUser} = require("./controllers/url");

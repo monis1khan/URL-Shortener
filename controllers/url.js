@@ -59,11 +59,27 @@ async function handleGetMyURLs(req, res) {
   return res.json(urls);
 }
 
+async function handleDeleteURL(req, res) {
+  const id = req.params.id;
+  
+  // We search by ID *and* createdBy to ensure users can only delete their own links
+  const result = await URL.findOneAndDelete({ 
+    _id: id, 
+    createdBy: req.user._id 
+  });
+
+  if (!result) {
+    return res.status(404).json({ error: "URL not found or unauthorized" });
+  }
+
+  return res.json({ status: "success", message: "URL deleted" });
+}
+
 module.exports = {
   handleGenerateNewShortURL,
   handleGetAnalytics,
   handleRedirectUser, 
   handleGetMyURLs,
-
-  
+  handleDeleteURL,
+   
 };

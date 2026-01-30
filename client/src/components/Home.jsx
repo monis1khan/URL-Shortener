@@ -18,7 +18,6 @@ const Home = () => {
       setError(null);
     } catch (err) {
       if (err.response && err.response.status === 401) {
-        // Token is invalid or expired
         localStorage.removeItem('token');
         navigate('/login');
       } else {
@@ -34,6 +33,24 @@ const Home = () => {
     fetchHistory();
   }, [navigate]);
 
+  
+  const handleDelete = async (id) => {
+    // 1. Confirm with the user
+    const confirmDelete = window.confirm("Are you sure you want to delete this link?");
+    if (!confirmDelete) return;
+
+    try {
+      // 2. Call the Backend API
+      await api.delete(`/url/${id}`);
+      
+      // 3. Update the UI instantly (remove the item from the list)
+      setHistory(history.filter((item) => item._id !== id));
+    } catch (err) {
+      console.error("Failed to delete url:", err);
+      alert("Failed to delete URL. It might not exist or you are not authorized.");
+    }
+  };
+
   const handleShortenUrl = async (e) => {
     e.preventDefault();
     if (!originalUrl) {
@@ -43,8 +60,8 @@ const Home = () => {
     setError(null);
     try {
       await api.post('/url', { url: originalUrl });
-      setOriginalUrl(''); // Clear input field
-      fetchHistory(); // Refresh the history table
+      setOriginalUrl('');
+      fetchHistory();
     } catch (err) {
        if (err.response && err.response.status === 401) {
         localStorage.removeItem('token');
@@ -93,6 +110,7 @@ const Home = () => {
                     <th className="p-3 text-left">Short ID</th>
                     <th className="p-3 text-left">Original URL</th>
                     <th className="p-3 text-left">Clicks</th>
+                    <th className="p-3 text-left">Action</th> 
                   </tr>
                 </thead>
                 <tbody>
@@ -120,11 +138,21 @@ const Home = () => {
                         </a>
                       </td>
                       <td className="p-3">{item.visitHistory.length}</td>
+                      
+                      <td className="p-3">
+                        <button
+                            onClick={() => handleDelete(item._id)}
+                            className="bg-red-600/20 text-red-500 border border-red-500 px-3 py-1 rounded hover:bg-red-600 hover:text-white transition-all text-xs"
+                        >
+                            [ DELETE ]
+                        </button>
+                      </td>
+
                     </tr>
                   ))}
                   {history.length === 0 && (
                      <tr>
-                        <td colSpan="3" className="p-3 text-center text-gray-500">
+                        <td colSpan="4" className="p-3 text-center text-gray-500">
                            &gt;_ No links created yet.
                         </td>
                      </tr>

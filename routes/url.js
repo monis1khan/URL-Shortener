@@ -2,8 +2,8 @@ const express = require("express");
 const { 
     handleGenerateNewShortURL, 
     handleGetAnalytics, 
-    handleRedirectUser,
-    handleGetMyURLs
+    handleGetMyURLs,
+    handleDeleteURL
 } = require("../controllers/url");
 
 // 2. Import Auth Middleware 
@@ -24,7 +24,7 @@ router.get("/analytics/:shortId", restrictToLoggedinUserOnly, handleGetAnalytics
 
 router.get("/history", restrictToLoggedinUserOnly, handleGetMyURLs);
 
-// Anyone can visit this (no login required)
-router.get("/:shortId", handleRedirectUser);
+router.delete("/:id", restrictToLoggedinUserOnly, handleDeleteURL);
+
 
 module.exports = router;
