@@ -1,3 +1,4 @@
+const redisClient = require("../clients/redis");
 const { nanoid } = require("nanoid");
 const URL = require("../models/url");
 
@@ -36,6 +37,20 @@ async function handleGetAnalytics(req, res) {
 // NEW: Add this function to handle the public redirect
 async function handleRedirectUser(req, res) {
   const shortId = req.params.shortId;
+  
+  // we check data in redis 
+  const cacheUrl = await redisClient.get(`url:${shortId}`);
+  if(cacheUrl) {
+    res.redirect(cacheUrl);
+  
+  URL.findOneAndUpdate(
+    {shortId},
+    {$push: {visitHistory: {timestamp: Date.now()}}}
+    ).catch((err)=>console.log("Error updating analytics",err));
+    return ;
+  }
+
+  // if data is not in redis 
   const entry = await URL.findOneAndUpdate(
     { shortId },
     { $push: { visitHistory: { timestamp: Date.now() } } }
@@ -44,7 +59,7 @@ async function handleRedirectUser(req, res) {
   if (!entry) {
     return res.status(404).json({ error: "Short URL not found" });
   }
-
+  await redisClient.set(`url:${shortId}`, entry.redirectURL);
   res.redirect(entry.redirectURL);
 }
 
@@ -71,7 +86,7 @@ async function handleDeleteURL(req, res) {
   if (!result) {
     return res.status(404).json({ error: "URL not found or unauthorized" });
   }
-
+  await redisClient.del(`url:${result.shortId}`);
   return res.json({ status: "success", message: "URL deleted" });
 }
 
@@ -81,5 +96,5 @@ module.exports = {
   handleRedirectUser, 
   handleGetMyURLs,
   handleDeleteURL,
-   
+
 };
