@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require("express");
 const {connectMongoDB} = require("./connect");
 const cors = require("cors");
@@ -12,7 +13,7 @@ const urlRoute = require("./routes/url");
 const userRoute = require("./routes/user")
 
 //connection of mongoDB
-connectMongoDB("mongodb://127.0.0.1:27017/short-url")
+connectMongoDB(process.env.MONGO_URL)
 .then(()=>console.log("MongoDB connected"))
 
 //middlewares

@@ -1,7 +1,7 @@
-
+require('dotenv').config();
 // service/auth.js
 const jwt = require("jsonwebtoken");
-const secret = "Futball$123@";
+const secret = process.env.JWT_SECRET;
 
 function setUser(user) {
   // pick only necessary fields
