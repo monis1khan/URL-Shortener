@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 const api = axios.create({
   baseURL: 'http://localhost:8001/api',
+  withCredentials: true
 });
 
 // Request Interceptor:

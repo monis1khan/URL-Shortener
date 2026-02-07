@@ -1,2 +1,23 @@
+# --- Dependencies ---
 node_modules/
+client/node_modules/
+backend/node_modules/
+
+# --- Security (The Big One) ---
 .env
+.env.local
+.env.production
+.env.test
+
+# --- Build Output ---
+dist/
+client/dist/
+
+# --- Database Data ---
+mongo_data/
+redis_data/
+
+# --- System Junk ---
+.DS_Store
+Thumbs.db
+*.log

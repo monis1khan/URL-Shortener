@@ -18,8 +18,14 @@ connectMongoDB(process.env.MONGO_URL)
 
 //middlewares
 app.use(cors({
-  origin: "http://localhost:5173",
-  credentials: true
+    // 1. We allow both Docker (port 80) and Local Dev (port 5173)
+    origin: ["http://localhost", "http://localhost:5173"],
+    
+    // 2. REQUIRED for JWT: Allows cookies and authorization headers
+    credentials: true,
+
+    // 3. Optional but good: Allow specific methods
+    methods: ["GET", "POST", "PUT", "DELETE"]
 }));
 app.use(express.json());
 app.use(express.urlencoded({extended: false}))

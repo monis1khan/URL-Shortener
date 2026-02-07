@@ -1,0 +1,22 @@
+# .dockerignore
+
+# 1. Dependencies (Let Docker install these fresh)
+node_modules
+npm-debug.log
+
+# 2. Version Control (Not needed in production)
+.git
+.gitignore
+
+# 3. Frontend (Backend doesn't need this!)
+client
+
+# 4. Environment Variables (Safety First!)
+# Only ignore .env if you are passing variables via docker-compose
+# If you are NOT using docker-compose environment section
+.env
+
+# 5. Docker Metadata (Don't copy Docker config into the container)
+Dockerfile
+docker-compose.yml
+.dockerignore
