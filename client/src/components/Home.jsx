@@ -137,8 +137,9 @@ const Home = () => {
                           {item.redirectURL}
                         </a>
                       </td>
-                      <td className="p-3">{item.visitHistory.length}</td>
                       
+                      <td className="p-3">{item.totalClicks || 0}</td>
+    
                       <td className="p-3">
                         <button
                             onClick={() => handleDelete(item._id)}

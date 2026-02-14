@@ -14,7 +14,8 @@ const userRoute = require("./routes/user")
 
 //connection of mongoDB
 connectMongoDB(process.env.MONGO_URL)
-.then(()=>console.log("MongoDB connected"))
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.log("MongoDB Error:", err));
 
 //middlewares
 app.use(cors({

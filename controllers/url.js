@@ -1,100 +1,166 @@
-const redisClient = require("../clients/redis");
-const { nanoid } = require("nanoid");
+require("dotenv").config();
 const URL = require("../models/url");
+const Analytics = require("../models/analytics"); // <--- IMPORT THE NEW MODEL
+const redisClient = require("../clients/redis"); 
+const { getUniqueId } = require("../services/tokenService");
+const Hashids = require('hashids/cjs');
+
+// CONFIGURATION:
+const hashids = new Hashids(process.env.HASH_SALT, 3);
 
 async function handleGenerateNewShortURL(req, res) {
-  const body = req.body;
-  if (!body.url) return res.status(400).json({ error: "url is required" });
+    try {
+        const body = req.body;
+        if (!body.url) return res.status(400).json({ error: "url is required" });
 
-  const shortID = nanoid(8);
-  
-  await URL.create({
-    shortId: shortID,
-    redirectURL: body.url,
-    visitHistory: [],
-    // Ensure your auth middleware is populating req.user!
-    createdBy: req.user._id, 
-  });
+        // 1. Get Unique ID
+        const uniqueNumber = await getUniqueId();
+        const shortID = hashids.encode(uniqueNumber);
 
-  // CHANGE: Return JSON instead of rendering a view
-  return res.status(201).json({ id: shortID });
+        // 2. Save to MongoDB (Summary Only)
+        // NOTICE: No visitHistory array here!
+        await URL.create({
+            shortId: shortID,
+            redirectURL: body.url,
+            totalClicks: 0, // <--- We start at 0
+            createdBy: req.user._id, 
+        });
+
+        return res.status(201).json({ id: shortID });
+    } catch (error) {
+        console.error("Error generating URL:", error);
+        return res.status(500).json({ error: "Server Error" });
+    }
+}
+
+async function handleRedirectUser(req, res) {
+    const shortId = req.params.shortId;
+    const userAgent = req.headers['user-agent'];
+    const ipAddress = req.ip || req.socket.remoteAddress;
+
+    try {
+        // ===============================================
+        // 1. REDIS CACHE HIT (Fast Path)
+        // ===============================================
+        const cacheUrl = await redisClient.get(`url:${shortId}`);
+
+        if (cacheUrl) {
+          
+            await URL.updateOne(
+                { shortId }, 
+                { $inc: { totalClicks: 1 } }
+            );
+
+            // Create Analytics in the background 
+            Analytics.create({
+                shortId,
+                userAgent,
+                ipAddress,
+            }).catch(err => console.log("Analytics Log Error:", err));
+            
+            // NOW we redirect
+            return res.redirect(cacheUrl);
+        }
+
+       
+        // 2. DATABASE HIT (Slow Path)
+        
+        const entry = await URL.findOne({ shortId });
+
+        if (!entry) {
+            return res.status(404).json({ error: "Short URL not found" });
+        }
+
+        // CRITICAL FIX: Increment the counter here too
+        await URL.updateOne(
+            { shortId }, 
+            { $inc: { totalClicks: 1 } }
+        );
+
+        // Save to Redis for next time (expires in 24 hours)
+        await redisClient.set(`url:${shortId}`, entry.redirectURL, { EX: 86400 });
+
+        // Create Analytics in the background
+        Analytics.create({
+            shortId,
+            userAgent,
+            ipAddress,
+        }).catch(err => console.log("Analytics Log Error:", err));
+
+        // Redirect
+        return res.redirect(entry.redirectURL);
+
+    } catch (error) {
+        console.error("Error in redirect:", error);
+        return res.status(500).json({ error: "Server Error" });
+    }
 }
 
 async function handleGetAnalytics(req, res) {
-  const shortId = req.params.shortId;
-  const result = await URL.findOne({ shortId });
-  
-  if (!result) {
-    return res.status(404).json({ error: "Short URL not found" });
-  }
+    try {
+        const shortId = req.params.shortId;
 
-  return res.json({
-    totalClicks: result.visitHistory.length,
-    analytics: result.visitHistory,
-  });
-}
+        // 1. Get the Total Count (Fast)
+        const urlDoc = await URL.findOne({ shortId });
+        if (!urlDoc) {
+            return res.status(404).json({ error: "Short URL not found" });
+        }
 
-// NEW: Add this function to handle the public redirect
-async function handleRedirectUser(req, res) {
-  const shortId = req.params.shortId;
-  
-  // we check data in redis 
-  const cacheUrl = await redisClient.get(`url:${shortId}`);
-  if(cacheUrl) {
-    res.redirect(cacheUrl);
-  
-  URL.findOneAndUpdate(
-    {shortId},
-    {$push: {visitHistory: {timestamp: Date.now()}}}
-    ).catch((err)=>console.log("Error updating analytics",err));
-    return ;
-  }
+        // 2. Get the Recent Logs (Last 50)
+        const recentHistory = await Analytics.find({ shortId })
+            .sort({ timestamp: -1 })
+            .limit(50);
 
-  // if data is not in redis 
-  const entry = await URL.findOneAndUpdate(
-    { shortId },
-    { $push: { visitHistory: { timestamp: Date.now() } } }
-  );
-
-  if (!entry) {
-    return res.status(404).json({ error: "Short URL not found" });
-  }
-  await redisClient.set(`url:${shortId}`, entry.redirectURL);
-  res.redirect(entry.redirectURL);
+        return res.json({
+            totalClicks: urlDoc.totalClicks, // <--- This is the number your Frontend needs
+            analytics: recentHistory,
+        });
+    } catch (error) {
+        return res.status(500).json({ error: "Server Error" });
+    }
 }
 
 async function handleGetMyURLs(req, res) {
- 
-  if (!req.user || !req.user._id) return res.status(401).json({ error: 'Unauthorized' });
+    try {
+        if (!req.user || !req.user._id) return res.status(401).json({ error: 'Unauthorized' });
 
-
-  const urls = await URL.find({ createdBy: req.user._id });
-
-  
-  return res.json(urls);
+        const urls = await URL.find({ createdBy: req.user._id });
+        return res.json(urls);
+    } catch (error) {
+        return res.status(500).json({ error: "Server Error" });
+    }
 }
 
 async function handleDeleteURL(req, res) {
-  const id = req.params.id;
-  
-  // We search by ID *and* createdBy to ensure users can only delete their own links
-  const result = await URL.findOneAndDelete({ 
-    _id: id, 
-    createdBy: req.user._id 
-  });
+    try {
+        const id = req.params.id;
+        
+        // 1. Delete URL
+        const result = await URL.findOneAndDelete({ 
+            _id: id, 
+            createdBy: req.user._id 
+        });
 
-  if (!result) {
-    return res.status(404).json({ error: "URL not found or unauthorized" });
-  }
-  await redisClient.del(`url:${result.shortId}`);
-  return res.json({ status: "success", message: "URL deleted" });
+        if (!result) {
+            return res.status(404).json({ error: "URL not found or unauthorized" });
+        }
+        
+        // 2. Clear Cache
+        await redisClient.del(`url:${result.shortId}`);
+
+        // 3. Clear Logs (Optional but clean)
+        await Analytics.deleteMany({ shortId: result.shortId });
+        
+        return res.json({ status: "success", message: "URL deleted" });
+    } catch (error) {
+        return res.status(500).json({ error: "Server Error" });
+    }
 }
 
 module.exports = {
-  handleGenerateNewShortURL,
-  handleGetAnalytics,
-  handleRedirectUser, 
-  handleGetMyURLs,
-  handleDeleteURL,
-
+    handleGenerateNewShortURL,
+    handleGetAnalytics,
+    handleRedirectUser,
+    handleGetMyURLs,
+    handleDeleteURL,
 };

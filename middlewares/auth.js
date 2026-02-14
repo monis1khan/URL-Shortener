@@ -1,4 +1,4 @@
-const{getUser} = require("../service/auth")
+const{getUser} = require("../services/auth")
 
 async function restrictToLoggedinUserOnly(req,res,next) {
    // Extract Bearer token from Authorization header
