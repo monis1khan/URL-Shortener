@@ -1,26 +1,48 @@
 version: '3.8'
 
 services:
-  # 1. Backend (Node.js)
+  # 1. Backend (Node.js API)
   api:
     build: .
     container_name: backend
     ports:
       - "8001:8001"
     environment:
-      # These now pull directly from your .env file!
       - PORT=${PORT}
       - MONGO_URL=${MONGO_URL}
       - REDIS_URL=${REDIS_URL}
       - JWT_SECRET=${JWT_SECRET}
+      # API talks to Kafka inside Docker on port 29092
+      - KAFKA_BROKER=kafka:29092 
     volumes:
       - ./:/app
       - /app/node_modules
     depends_on:
       - mongo
       - redis
+      - kafka
 
-  # 2. Frontend (React/Vite)
+  # 2. Worker (The Background Processor) - NEW!
+  worker:
+    build: .
+    container_name: worker
+    # This overrides "npm start" to run your worker script instead
+    # NOTE: If your file is in 'src', change this to ["node", "src/worker.js"]
+    command: ["node", "worker.js"] 
+    restart: always
+    environment:
+      - MONGO_URL=${MONGO_URL}
+      # Worker also talks to Kafka internally
+      - KAFKA_BROKER=kafka:29092
+    volumes:
+      - ./:/app
+      - /app/node_modules
+    depends_on:
+      - kafka
+      - mongo
+      - redis
+
+  # 3. Frontend (React/Vite)
   client:
     build: ./client
     container_name: frontend
@@ -32,7 +54,7 @@ services:
       - ./client:/app
       - /app/node_modules
 
-  # 3. Nginx (The Gateway)
+  # 4. Nginx (Gateway)
   nginx:
     image: nginx:alpine
     container_name: nginx
@@ -44,17 +66,17 @@ services:
       - api
       - client
 
-  # 4. Redis Stack (Database + GUI)
+  # 5. Redis Stack (DB + GUI)
   redis:
     image: redis/redis-stack:latest 
     container_name: redis_stack
     ports:
-      - "6379:6379"  # Database connection
-      - "8002:8001"  # GUI Dashboard
+      - "6379:6379"
+      - "8002:8001"
     volumes:
       - redis_data:/data
 
-  # 5. MongoDB
+  # 6. MongoDB
   mongo:
     image: mongo:latest
     container_name: mongo_db
@@ -62,6 +84,40 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+
+  # 7. Kafka (KRaft Mode - Apache Image)
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka
+    ports:
+      - "9092:9092" # External access (Host machine)
+    environment:
+      # --- KRAFT SETTINGS ---
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      
+      # --- LISTENERS ---
+      # Internal (Docker): 29092
+      # Controller (Voting): 29093
+      # External (Host): 9092
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:29093,PLAINTEXT_HOST://:9092
+      
+      # --- ADVERTISED LISTENERS ---
+      # Internal clients (API & Worker) see: kafka:29092
+      # External clients (Your laptop) see: localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      
+      # --- SECURITY & MAPPING ---
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      
+      # --- TUNING ---
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
 
 volumes:
   mongo_data:

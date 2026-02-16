@@ -1,11 +1,11 @@
 require("dotenv").config();
 const URL = require("../models/url");
-const Analytics = require("../models/analytics"); // <--- IMPORT THE NEW MODEL
+const Analytics = require("../models/analytics"); 
 const redisClient = require("../clients/redis"); 
 const { getUniqueId } = require("../services/tokenService");
 const Hashids = require('hashids/cjs');
+const { producer } = require('../kafka'); 
 
-// CONFIGURATION:
 const hashids = new Hashids(process.env.HASH_SALT, 3);
 
 async function handleGenerateNewShortURL(req, res) {
@@ -17,12 +17,11 @@ async function handleGenerateNewShortURL(req, res) {
         const uniqueNumber = await getUniqueId();
         const shortID = hashids.encode(uniqueNumber);
 
-        // 2. Save to MongoDB (Summary Only)
-        // NOTICE: No visitHistory array here!
+        // 2. Save to MongoDB
         await URL.create({
             shortId: shortID,
             redirectURL: body.url,
-            totalClicks: 0, // <--- We start at 0
+            totalClicks: 0, 
             createdBy: req.user._id, 
         });
 
@@ -42,53 +41,34 @@ async function handleRedirectUser(req, res) {
         // ===============================================
         // 1. REDIS CACHE HIT (Fast Path)
         // ===============================================
-        const cacheUrl = await redisClient.get(`url:${shortId}`);
+        let redirectURL = await redisClient.get(`url:${shortId}`);
 
-        if (cacheUrl) {
-          
-            await URL.updateOne(
-                { shortId }, 
-                { $inc: { totalClicks: 1 } }
-            );
-
-            // Create Analytics in the background 
-            Analytics.create({
-                shortId,
-                userAgent,
-                ipAddress,
-            }).catch(err => console.log("Analytics Log Error:", err));
-            
-            // NOW we redirect
-            return res.redirect(cacheUrl);
+        if (redirectURL) {
+            // KAFKA: Send the event and Redirect immediately!
+            // We do NOT wait for DB updates here.
+            sendAnalyticsToKafka(shortId, userAgent, ipAddress);
+            return res.redirect(redirectURL);
         }
 
-       
+        // ===============================================
         // 2. DATABASE HIT (Slow Path)
-        
+        // ===============================================
         const entry = await URL.findOne({ shortId });
 
         if (!entry) {
             return res.status(404).json({ error: "Short URL not found" });
         }
 
-        // CRITICAL FIX: Increment the counter here too
-        await URL.updateOne(
-            { shortId }, 
-            { $inc: { totalClicks: 1 } }
-        );
+        redirectURL = entry.redirectURL;
 
-        // Save to Redis for next time (expires in 24 hours)
-        await redisClient.set(`url:${shortId}`, entry.redirectURL, { EX: 86400 });
+        // Save to Redis for next time
+        await redisClient.set(`url:${shortId}`, redirectURL, { EX: 86400 });
 
-        // Create Analytics in the background
-        Analytics.create({
-            shortId,
-            userAgent,
-            ipAddress,
-        }).catch(err => console.log("Analytics Log Error:", err));
+        // KAFKA: Send the event
+        sendAnalyticsToKafka(shortId, userAgent, ipAddress);
 
         // Redirect
-        return res.redirect(entry.redirectURL);
+        return res.redirect(redirectURL);
 
     } catch (error) {
         console.error("Error in redirect:", error);
@@ -96,23 +76,44 @@ async function handleRedirectUser(req, res) {
     }
 }
 
+// --- HELPER FUNCTION TO SEND TO KAFKA ---
+async function sendAnalyticsToKafka(shortId, userAgent, ipAddress) {
+    try {
+        const payload = {
+            shortId,
+            userAgent,
+            ipAddress,
+            timestamp: Date.now()
+        };
+
+        // This is non-blocking (we don't await the result strictly if we want max speed)
+        await producer.send({
+            topic: 'url-clicks',
+            messages: [ { value: JSON.stringify(payload) } ],
+        });
+        
+    } catch (err) {
+        console.error("Kafka Produce Error:", err);
+    }
+}
+
 async function handleGetAnalytics(req, res) {
     try {
         const shortId = req.params.shortId;
 
-        // 1. Get the Total Count (Fast)
+        // 1. Get the Total Count
         const urlDoc = await URL.findOne({ shortId });
         if (!urlDoc) {
             return res.status(404).json({ error: "Short URL not found" });
         }
 
-        // 2. Get the Recent Logs (Last 50)
+        // 2. Get the Recent Logs
         const recentHistory = await Analytics.find({ shortId })
             .sort({ timestamp: -1 })
             .limit(50);
 
         return res.json({
-            totalClicks: urlDoc.totalClicks, // <--- This is the number your Frontend needs
+            totalClicks: urlDoc.totalClicks,
             analytics: recentHistory,
         });
     } catch (error) {
@@ -135,7 +136,6 @@ async function handleDeleteURL(req, res) {
     try {
         const id = req.params.id;
         
-        // 1. Delete URL
         const result = await URL.findOneAndDelete({ 
             _id: id, 
             createdBy: req.user._id 
@@ -145,10 +145,7 @@ async function handleDeleteURL(req, res) {
             return res.status(404).json({ error: "URL not found or unauthorized" });
         }
         
-        // 2. Clear Cache
         await redisClient.del(`url:${result.shortId}`);
-
-        // 3. Clear Logs (Optional but clean)
         await Analytics.deleteMany({ shortId: result.shortId });
         
         return res.json({ status: "success", message: "URL deleted" });
