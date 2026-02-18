@@ -11,7 +11,12 @@ const hashids = new Hashids(process.env.HASH_SALT, 3);
 async function handleGenerateNewShortURL(req, res) {
     try {
         const body = req.body;
+        
         if (!body.url) return res.status(400).json({ error: "url is required" });
+        let originalURL = body.url;
+        if (!originalURL.startsWith("http://") && !originalURL.startsWith("https://")) {
+            originalURL = "https://" + originalURL;
+        }
 
         // 1. Get Unique ID
         const uniqueNumber = await getUniqueId();

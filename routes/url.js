@@ -9,6 +9,7 @@ const {
 // 2. Import Auth Middleware 
 // (Make sure this path matches where your auth.js file is!)
 const { restrictToLoggedinUserOnly } = require("../middlewares/auth");
+const rateLimiter = require("../middlewares/rateLimiter");
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ const router = express.Router();
 // --- PROTECTED ROUTES ---
 // User must be logged in to create URLs or view analytics
 // We pass the middleware as the second argument here
-router.post("/", restrictToLoggedinUserOnly, handleGenerateNewShortURL);
+router.post("/", restrictToLoggedinUserOnly,rateLimiter, handleGenerateNewShortURL);
 
 router.get("/analytics/:shortId", restrictToLoggedinUserOnly, handleGetAnalytics);
 

@@ -9,6 +9,9 @@ const { producer } = require("./kafka");
 const app = express();
 const PORT = 8001;
 
+// 1. Tell Express to trust Nginx headers (COMPULSORY)
+app.set('trust proxy', true);
+
 //Routes
 const urlRoute = require("./routes/url");
 const userRoute = require("./routes/user");
