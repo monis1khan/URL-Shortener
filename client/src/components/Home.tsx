@@ -1,23 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, FormEvent, ChangeEvent } from 'react';
 import api from '../api';
 import NavBar from './NavBar';
 import { useNavigate } from 'react-router-dom';
 
-const Home = () => {
-  const [history, setHistory] = useState([]);
-  const [originalUrl, setOriginalUrl] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+// --- Type Definitions ---
+
+interface UrlEntry {
+  _id: string;
+  shortId: string;
+  redirectURL: string;
+  totalClicks: number;
+  visitHistory: { timestamp: number }[];
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface ShortenUrlResponse {
+  id: string;
+}
+
+interface ErrorResponse {
+  error: string;
+}
+
+// --- Component ---
+
+const Home: React.FC = () => {
+  const [history, setHistory] = useState<UrlEntry[]>([]);
+  const [originalUrl, setOriginalUrl] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const fetchHistory = async () => {
+  const fetchHistory = async (): Promise<void> => {
     try {
       setLoading(true);
-      const response = await api.get('/url/history');
+      const response = await api.get<UrlEntry[]>('/url/history');
       setHistory(response.data);
       setError(null);
-    } catch (err) {
-      if (err.response && err.response.status === 401) {
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { status: number; data?: ErrorResponse } };
+      if (axiosError.response && axiosError.response.status === 401) {
         localStorage.removeItem('token');
         navigate('/login');
       } else {
@@ -31,27 +55,23 @@ const Home = () => {
 
   useEffect(() => {
     fetchHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
-  
-  const handleDelete = async (id) => {
-    // 1. Confirm with the user
-    const confirmDelete = window.confirm("Are you sure you want to delete this link?");
+  const handleDelete = async (id: string): Promise<void> => {
+    const confirmDelete: boolean = window.confirm("Are you sure you want to delete this link?");
     if (!confirmDelete) return;
 
     try {
-      // 2. Call the Backend API
-      await api.delete(`/url/${id}`);
-      
-      // 3. Update the UI instantly (remove the item from the list)
-      setHistory(history.filter((item) => item._id !== id));
-    } catch (err) {
+      await api.delete<{ status: string; message: string }>(`/url/${id}`);
+      setHistory(history.filter((item: UrlEntry) => item._id !== id));
+    } catch (err: unknown) {
       console.error("Failed to delete url:", err);
       alert("Failed to delete URL. It might not exist or you are not authorized.");
     }
   };
 
-  const handleShortenUrl = async (e) => {
+  const handleShortenUrl = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (!originalUrl) {
       setError('Please enter a URL.');
@@ -59,11 +79,12 @@ const Home = () => {
     }
     setError(null);
     try {
-      await api.post('/url', { url: originalUrl });
+      await api.post<ShortenUrlResponse>('/url', { url: originalUrl });
       setOriginalUrl('');
       fetchHistory();
-    } catch (err) {
-       if (err.response && err.response.status === 401) {
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { status: number; data?: ErrorResponse } };
+      if (axiosError.response && axiosError.response.status === 401) {
         localStorage.removeItem('token');
         navigate('/login');
       } else {
@@ -71,6 +92,10 @@ const Home = () => {
         console.error(err);
       }
     }
+  };
+
+  const handleUrlInputChange = (e: ChangeEvent<HTMLInputElement>): void => {
+    setOriginalUrl(e.target.value);
   };
 
   return (
@@ -85,7 +110,7 @@ const Home = () => {
               <input
                 type="url"
                 value={originalUrl}
-                onChange={(e) => setOriginalUrl(e.target.value)}
+                onChange={handleUrlInputChange}
                 placeholder="Enter URL to shorten..."
                 className="flex-grow bg-gray-800 border border-green-500 rounded-md p-2 focus:ring-2 focus:ring-green-400 focus:outline-none transition-all"
               />
@@ -114,7 +139,7 @@ const Home = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {history.map((item) => (
+                  {history.map((item: UrlEntry) => (
                     <tr key={item.shortId} className="border-t border-green-900 hover:bg-gray-800/50 transition-colors">
                       <td className="p-3">
                         <a 
@@ -153,7 +178,7 @@ const Home = () => {
                   ))}
                   {history.length === 0 && (
                      <tr>
-                        <td colSpan="4" className="p-3 text-center text-gray-500">
+                        <td colSpan={4} className="p-3 text-center text-gray-500">
                            &gt;_ No links created yet.
                         </td>
                      </tr>

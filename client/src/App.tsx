@@ -5,7 +5,7 @@ import Login from './components/Login';
 import Signup from './components/Signup';
 import ProtectedRoute from './components/ProtectedRoute';
 
-function App() {
+const App: React.FC = () => {
   return (
     <Router>
       <Routes>
@@ -17,6 +17,6 @@ function App() {
       </Routes>
     </Router>
   );
-}
+};
 
 export default App;

@@ -1,25 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 
-const Signup = () => {
+// --- Type Definitions ---
+
+interface SignupResponse {
+  // Add fields here if your backend returns specific data on signup success (like a message or user object)
+  message?: string;
+}
+
+// --- Component ---
+
+const Signup: React.FC = () => {
   const [formData, setFormData] = useState({ name: '', email: '', password: '' });
   const navigate = useNavigate();
 
-  const handleChange = (e) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>): void => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-
-const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     try {
       // FIX: Change '/user' to '/user/signup'
-      await api.post('/user/signup', formData); 
+      await api.post<SignupResponse>('/user/signup', formData); 
       navigate('/login');
-    } catch (error) {
+    } catch (error: unknown) {
+      // Typed as unknown to follow strict TypeScript safety rules for catch blocks
       console.error('Signup failed:', error);
-      
     }
   };
 
@@ -31,23 +39,29 @@ const handleSubmit = async (e) => {
           <input
             type="text"
             name="name"
+            value={formData.name}
             placeholder="Name"
             onChange={handleChange}
             className="w-full px-4 py-2 text-white bg-gray-800 border border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
+            required
           />
           <input
             type="email"
             name="email"
+            value={formData.email}
             placeholder="Email"
             onChange={handleChange}
             className="w-full px-4 py-2 text-white bg-gray-800 border border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
+            required
           />
           <input
             type="password"
             name="password"
+            value={formData.password}
             placeholder="Password"
             onChange={handleChange}
             className="w-full px-4 py-2 text-white bg-gray-800 border border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
+            required
           />
           <button
             type="submit"

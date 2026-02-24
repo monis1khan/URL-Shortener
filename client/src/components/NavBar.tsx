@@ -1,11 +1,14 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
-const NavBar = () => {
+const NavBar: React.FC = () => {
   const navigate = useNavigate();
-  const token = localStorage.getItem('token');
+  
+  // Explicitly typing token as string | null, which is what localStorage returns
+  const token: string | null = localStorage.getItem('token');
 
-  const handleLogout = () => {
+  // Explicitly typing the return of the logout handler as void
+  const handleLogout = (): void => {
     localStorage.removeItem('token');
     // We can just reload the page to reset the state and redirect.
     // Or navigate to a specific route.

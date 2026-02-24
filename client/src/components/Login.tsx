@@ -1,42 +1,50 @@
-import React, { useState } from 'react';
+import React, { useState, ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 
-const Login = () => {
+// --- Type Definitions ---
+
+interface LoginResponse {
+  token?: string;
+}
+
+interface ErrorResponse {
+  error: string;
+}
+
+// --- Component ---
+
+const Login: React.FC = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
-  
-  // 1. ADD THIS: State to hold the error message
-  const [error, setError] = useState(""); 
+  const [error, setError] = useState<string>(""); 
   
   const navigate = useNavigate();
 
-  const handleChange = (e) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>): void => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     setError(""); // Clear previous errors before new request
     
     try {
-      const response = await api.post('/user/login', formData);
+      const response = await api.post<LoginResponse>('/user/login', formData);
       
-      // Note: If your backend uses cookies (httpOnly), you might not need this line.
-      // But if it sends a token, this is correct.
       if (response.data.token) {
         localStorage.setItem('token', response.data.token);
       }
       
       navigate('/');
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Login failed:', err);
       
-      // 2. ADD THIS: Catch the error from the backend
-      // This checks if the backend sent a specific message (e.g., "Invalid password")
-      if (err.response && err.response.data && err.response.data.error) {
-        setError(err.response.data.error);
+      const axiosError = err as { response?: { data?: ErrorResponse } };
+      
+      if (axiosError.response?.data?.error) {
+        setError(axiosError.response.data.error);
       } else {
-        setError("Invalid Email or Password"); // Fallback message
+        setError("Invalid Email or Password");
       }
     }
   };
@@ -50,6 +58,7 @@ const Login = () => {
             type="email"
             name="email"
             placeholder="Email"
+            value={formData.email}
             onChange={handleChange}
             className="w-full px-4 py-2 text-white bg-gray-800 border border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
           />
@@ -57,11 +66,11 @@ const Login = () => {
             type="password"
             name="password"
             placeholder="Password"
+            value={formData.password}
             onChange={handleChange}
             className="w-full px-4 py-2 text-white bg-gray-800 border border-green-400 rounded-md focus:outline-none focus:ring-2 focus:ring-green-400"
           />
 
-          {/* 3. ADD THIS: The Red Error Box */}
           {error && (
             <div className="p-3 text-sm text-center text-red-500 bg-red-900/20 border border-red-500 rounded-md">
               {error}
